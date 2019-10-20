@@ -1,0 +1,125 @@
+#include <TinyGPS++.h>
+#include <SoftwareSerial.h>
+
+#include "HX711.h"
+
+HX711 scale(5, 6);
+
+float calibration_factor = 2230; // this calibration factor is adjusted according to my load cell
+float units;
+float ounces;
+static const int RXPin = 4, TXPin = 3;
+static const uint32_t GPSBaud = 4800;
+TinyGPSPlus gps;
+SoftwareSerial ss(RXPin, TXPin);
+
+void setup() {
+  Serial.begin(9600);
+  Serial.println("HX711 calibration sketch");
+  Serial.println("Remove all weight from scale");
+  Serial.println("After readings begin, place known weight on scale");
+  Serial.println("Press + or a to increase calibration factor");
+  Serial.println("Press - or z to decrease calibration factor");
+
+  scale.set_scale();
+  scale.tare();  //Reset the scale to 0
+
+  long zero_factor = scale.read_average(); //Get a baseline reading
+  Serial.print("Zero factor: "); //This can be used to remove the need to tare the scale. Useful in permanent scale projects.
+  Serial.println(zero_factor);
+
+   Serial.begin(115200);
+  ss.begin(GPSBaud);
+
+  Serial.println(F("DeviceExample.ino"));
+  Serial.print(F("Testing TinyGPS++ library v. ")); Serial.println(TinyGPSPlus::libraryVersion());
+  Serial.println();
+}
+
+void loop() {
+
+  scale.set_scale(calibration_factor); //Adjust to this calibration factor
+
+  Serial.print("Reading: ");
+  units = scale.get_units(), 10;
+  if (units < 0)
+  {
+    units = 0.00;
+  }
+  ounces = units * 0.035274;
+  Serial.print(units);
+  Serial.print(" grams"); 
+  Serial.print(" calibration_factor: ");
+  Serial.print(calibration_factor);
+  Serial.println();
+
+  if(Serial.available())
+  {
+    char temp = Serial.read();
+    if(temp == '+' || temp == 'a')
+      calibration_factor += 1;
+    else if(temp == '-' || temp == 'z')
+      calibration_factor -= 1;
+  }
+
+  while (ss.available() > 0)
+    if (gps.encode(ss.read()))
+      displayInfo();
+
+  if (millis() > 5000 && gps.charsProcessed() < 10)
+  {
+    Serial.println(F("No GPS detected: check wiring."));
+    while(true);
+  }
+}
+
+void displayInfo()
+{
+  Serial.print(F("Location: ")); 
+  if (gps.location.isValid())
+  {
+    Serial.print(gps.location.lat(), 6);
+    Serial.print(F(","));
+    Serial.print(gps.location.lng(), 6);
+  }
+  else
+  {
+    Serial.print(F("INVALID"));
+  }
+
+  Serial.print(F("  Date/Time: "));
+  if (gps.date.isValid())
+  {
+    Serial.print(gps.date.month());
+    Serial.print(F("/"));
+    Serial.print(gps.date.day());
+    Serial.print(F("/"));
+    Serial.print(gps.date.year());
+  }
+  else
+  {
+    Serial.print(F("INVALID"));
+  }
+
+  Serial.print(F(" "));
+  if (gps.time.isValid())
+  {
+    if (gps.time.hour() < 10) Serial.print(F("0"));
+    Serial.print(gps.time.hour());
+    Serial.print(F(":"));
+    if (gps.time.minute() < 10) Serial.print(F("0"));
+    Serial.print(gps.time.minute());
+    Serial.print(F(":"));
+    if (gps.time.second() < 10) Serial.print(F("0"));
+    Serial.print(gps.time.second());
+    Serial.print(F("."));
+    if (gps.time.centisecond() < 10) Serial.print(F("0"));
+    Serial.print(gps.time.centisecond());
+  }
+  else
+  {
+    Serial.print(F("INVALID"));
+  }
+
+  Serial.println();
+}
